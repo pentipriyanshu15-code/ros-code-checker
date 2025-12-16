@@ -1,43 +1,48 @@
-from flask import Flask, render_template, request
-import subprocess, os
+from flask import Flask, request, render_template_string
+import subprocess
+import os
 
 app = Flask(__name__)
-UPLOAD = "uploads"
-os.makedirs(UPLOAD, exist_ok=True)
+
+HTML = """
+<h2>ROS Code Checker & Simulation</h2>
+
+<form method="post" enctype="multipart/form-data">
+  <input type="file" name="zipfile" required>
+  <input type="submit" value="Run Checker & Simulation">
+</form>
+
+<h3>Output:</h3>
+<pre>{{ output }}</pre>
+"""
 
 @app.route("/", methods=["GET", "POST"])
-def index():
+def home():
     output = ""
-
     if request.method == "POST":
-        if "zip" not in request.files:
-            return "No file uploaded"
+        file = request.files["zipfile"]
+        zip_path = os.path.join("/tmp", file.filename)
+        file.save(zip_path)
 
-        file = request.files["zip"]
-
-        if file.filename == "":
-            return "No file selected"
-
-        path = os.path.join(UPLOAD, file.filename)
-        file.save(path)
-
+        # Run code checker
         checker = subprocess.run(
             ["python3", "../checker/code_checker.py"],
-            input=path,
+            input=zip_path + "\n",
             text=True,
             capture_output=True
         )
 
-        simulator = subprocess.run(
+        # Run simulation
+        simulation = subprocess.run(
             ["python3", "../simulator/run_simulation.py"],
-            capture_output=True,
-            text=True
+            text=True,
+            capture_output=True
         )
 
-        output = checker.stdout + "\n" + simulator.stdout
+        output = checker.stdout + "\n--- Simulation Output ---\n" + simulation.stdout
 
-    return render_template("index.html", out=output)
+    return render_template_string(HTML, output=output)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", port=5010, debug=False)
 
